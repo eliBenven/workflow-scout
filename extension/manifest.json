@@ -1,0 +1,26 @@
+{
+  "manifest_version": 3,
+  "name": "Workflow Scout Recorder",
+  "version": "1.0.0",
+  "description": "Records browser activity for workflow automation detection",
+  "permissions": [
+    "activeTab",
+    "storage",
+    "webNavigation"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Workflow Scout"
+  },
+  "icons": {}
+}

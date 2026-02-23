@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Workflow Scout</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="container">
+    <h1>Workflow Scout</h1>
+    <p class="subtitle">Browser activity recorder</p>
+
+    <div class="field">
+      <label for="session-name">Session name</label>
+      <input type="text" id="session-name" placeholder="e.g. weekly-report" />
+    </div>
+
+    <div class="status" id="status">
+      <span class="dot" id="dot"></span>
+      <span id="status-text">Idle</span>
+    </div>
+
+    <div class="stats">
+      <span id="event-count">0</span> events recorded
+    </div>
+
+    <div class="actions">
+      <button id="btn-start" class="btn btn-start">Start Recording</button>
+      <button id="btn-stop" class="btn btn-stop" disabled>Stop</button>
+    </div>
+
+    <div class="secondary-actions">
+      <button id="btn-export" class="btn btn-secondary">Export JSON</button>
+      <button id="btn-clear" class="btn btn-danger">Clear</button>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

@@ -3,3 +3,7 @@ node_modules
 .env
 .env.*
 dist
+*.db
+*.db-wal
+*.db-shm
+workflow-*.json
