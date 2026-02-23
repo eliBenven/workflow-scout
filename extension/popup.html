@@ -19,10 +19,26 @@
     <div class="status" id="status">
       <span class="dot" id="dot"></span>
       <span id="status-text">Idle</span>
+      <span class="duration" id="duration"></span>
     </div>
 
-    <div class="stats">
-      <span id="event-count">0</span> events recorded
+    <div class="stats-grid">
+      <div class="stat">
+        <span class="stat-value" id="event-count">0</span>
+        <span class="stat-label">events</span>
+      </div>
+      <div class="stat">
+        <span class="stat-value" id="nav-count">0</span>
+        <span class="stat-label">navigations</span>
+      </div>
+      <div class="stat">
+        <span class="stat-value" id="click-count">0</span>
+        <span class="stat-label">clicks</span>
+      </div>
+      <div class="stat">
+        <span class="stat-value" id="form-count">0</span>
+        <span class="stat-label">forms</span>
+      </div>
     </div>
 
     <div class="actions">
@@ -33,6 +49,11 @@
     <div class="secondary-actions">
       <button id="btn-export" class="btn btn-secondary">Export JSON</button>
       <button id="btn-clear" class="btn btn-danger">Clear</button>
+    </div>
+
+    <div class="session-info" id="session-info" style="display: none;">
+      <div class="info-label">Current session</div>
+      <div class="info-value" id="session-id-display"></div>
     </div>
   </div>
 

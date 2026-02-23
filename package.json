@@ -1,6 +1,6 @@
 {
   "name": "workflow-scout",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Record browser activity, detect repeated patterns, and export n8n-compatible automation workflows",
   "license": "MIT",
   "author": "Eli Benveniste",
@@ -13,7 +13,8 @@
     "dev": "tsc --watch",
     "start": "node dist/cli.js",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "package:extension": "cd extension && zip -r ../workflow-scout-extension.zip . && cd .. && echo 'Extension packaged: workflow-scout-extension.zip'"
   },
   "dependencies": {
     "better-sqlite3": "^11.7.0",

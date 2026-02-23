@@ -16,7 +16,12 @@ function timestamp() {
 
 async function getState() {
   const result = await chrome.storage.local.get(STATE_KEY);
-  return result[STATE_KEY] || { recording: false, sessionId: null, sessionName: "" };
+  return result[STATE_KEY] || {
+    recording: false,
+    sessionId: null,
+    sessionName: "",
+    startedAt: null,
+  };
 }
 
 async function setState(patch) {
@@ -40,6 +45,21 @@ async function pushEvent(event) {
   const events = result[EVENTS_KEY] || [];
   events.push(enriched);
   await chrome.storage.local.set({ [EVENTS_KEY]: events });
+}
+
+/**
+ * Count events by type for the current session.
+ */
+async function getTypeCounts(sessionId, events) {
+  const sessionEvents = sessionId
+    ? events.filter((e) => e.sessionId === sessionId)
+    : events;
+
+  const counts = {};
+  for (const e of sessionEvents) {
+    counts[e.type] = (counts[e.type] || 0) + 1;
+  }
+  return counts;
 }
 
 // ── webNavigation listeners ────────────────────────────────────────────────────
@@ -66,6 +86,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           recording: true,
           sessionId,
           sessionName: message.sessionName || sessionId,
+          startedAt: new Date().toISOString(),
         });
         sendResponse({ ok: true, state });
         break;
@@ -84,7 +105,13 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         const sessionEvents = state.sessionId
           ? events.filter((e) => e.sessionId === state.sessionId)
           : [];
-        sendResponse({ ok: true, state, eventCount: sessionEvents.length });
+        const typeCounts = await getTypeCounts(state.sessionId, events);
+        sendResponse({
+          ok: true,
+          state,
+          eventCount: sessionEvents.length,
+          typeCounts,
+        });
         break;
       }
 

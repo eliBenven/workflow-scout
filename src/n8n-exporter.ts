@@ -103,16 +103,27 @@ function buildHttpRequestNode(
   };
 
   if (step.type === "form_submit") {
-    params.method = "POST";
+    params.method = step.httpMethod || "POST";
     params.sendBody = true;
-    params.bodyParameters = {
-      parameters: [
-        {
-          name: "field1",
-          value: "={{ $json.field1 }}",
-        },
-      ],
-    };
+
+    // Use actual captured form field names when available
+    if (step.formFields && Object.keys(step.formFields).length > 0) {
+      params.bodyParameters = {
+        parameters: Object.entries(step.formFields).map(([name, value]) => ({
+          name,
+          value: value === "[REDACTED]" ? `={{ $json.${name} }}` : value,
+        })),
+      };
+    } else {
+      params.bodyParameters = {
+        parameters: [
+          {
+            name: "field1",
+            value: "={{ $json.field1 }}",
+          },
+        ],
+      };
+    }
   }
 
   return {

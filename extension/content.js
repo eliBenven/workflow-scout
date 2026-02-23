@@ -56,6 +56,41 @@ function getSelector(el) {
 }
 
 /**
+ * Patterns that indicate sensitive data in field names.
+ * These fields will have their values redacted.
+ */
+const SENSITIVE_FIELD_PATTERNS = [
+  "password", "passwd", "pwd",
+  "secret", "token", "api_key", "apikey", "api-key",
+  "credit", "card", "ccnum", "cvv", "cvc", "ccv",
+  "ssn", "social_security", "social-security",
+  "routing", "account_number", "account-number",
+  "pin",
+];
+
+/**
+ * Patterns that indicate sensitive data in field values.
+ */
+const SENSITIVE_VALUE_PATTERNS = [
+  /^\d{13,19}$/,              // credit card numbers (13-19 digits)
+  /^\d{3}-\d{2}-\d{4}$/,     // SSN format (XXX-XX-XXXX)
+  /^\d{9}$/,                  // SSN without dashes
+  /^sk[-_].{20,}$/i,          // Stripe-style secret keys
+  /^(ghp|gho|ghu|ghs|ghr)_/, // GitHub tokens
+  /^eyJ[A-Za-z0-9-_]+\./,    // JWT tokens
+];
+
+function isSensitiveFieldName(name) {
+  const lower = name.toLowerCase();
+  return SENSITIVE_FIELD_PATTERNS.some((pat) => lower.includes(pat));
+}
+
+function isSensitiveValue(value) {
+  if (typeof value !== "string") return false;
+  return SENSITIVE_VALUE_PATTERNS.some((re) => re.test(value.trim()));
+}
+
+/**
  * Send an event to the background service worker.
  */
 function send(event) {
@@ -97,11 +132,14 @@ document.addEventListener(
     const fields = {};
     const formData = new FormData(form);
     for (const [key, value] of formData.entries()) {
-      // Omit password values for safety
-      if (key.toLowerCase().includes("password") || key.toLowerCase().includes("passwd")) {
+      if (isSensitiveFieldName(key)) {
         fields[key] = "[REDACTED]";
+      } else if (typeof value === "string") {
+        fields[key] = isSensitiveValue(value)
+          ? "[REDACTED]"
+          : value.slice(0, 500);
       } else {
-        fields[key] = typeof value === "string" ? value.slice(0, 500) : "[file]";
+        fields[key] = "[file]";
       }
     }
 
@@ -134,9 +172,11 @@ document.addEventListener(
     clearTimeout(inputTimeout);
     inputTimeout = setTimeout(() => {
       const inputType = target.type || "text";
-      const isPassword =
+      const fieldName = target.name || "";
+      const isSensitive =
         inputType === "password" ||
-        (target.name || "").toLowerCase().includes("password");
+        isSensitiveFieldName(fieldName) ||
+        isSensitiveValue(target.value || "");
 
       send({
         type: "input_change",
@@ -144,8 +184,8 @@ document.addEventListener(
         selector: getSelector(target),
         tagName: tag,
         inputType,
-        name: target.name || "",
-        value: isPassword ? "[REDACTED]" : (target.value || "").slice(0, 500),
+        name: fieldName,
+        value: isSensitive ? "[REDACTED]" : (target.value || "").slice(0, 500),
         timestamp: new Date().toISOString(),
       });
     }, 300);

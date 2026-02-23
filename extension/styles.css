@@ -68,7 +68,7 @@ h1 {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 8px;
+  margin-bottom: 10px;
   font-size: 13px;
   font-weight: 600;
 }
@@ -91,17 +91,69 @@ h1 {
   50% { opacity: 0.4; }
 }
 
-/* ── Stats ──────────────────────────────────────────────────────────────────── */
-
-.stats {
+.duration {
+  margin-left: auto;
   font-size: 12px;
-  color: #6c757d;
+  font-weight: 600;
+  color: #4361ee;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Stats Grid ─────────────────────────────────────────────────────────────── */
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
   margin-bottom: 14px;
 }
 
-.stats span {
+.stat {
+  text-align: center;
+  padding: 8px 4px;
+  background: #fff;
+  border-radius: 6px;
+  border: 1px solid #e9ecef;
+}
+
+.stat-value {
+  display: block;
+  font-size: 18px;
   font-weight: 700;
   color: #4361ee;
+  font-variant-numeric: tabular-nums;
+}
+
+.stat-label {
+  display: block;
+  font-size: 10px;
+  color: #6c757d;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-top: 2px;
+}
+
+/* ── Session info ───────────────────────────────────────────────────────────── */
+
+.session-info {
+  margin-top: 10px;
+  padding: 8px;
+  background: #e8f4fd;
+  border-radius: 6px;
+  font-size: 11px;
+}
+
+.info-label {
+  font-weight: 600;
+  color: #495057;
+  margin-bottom: 2px;
+}
+
+.info-value {
+  color: #4361ee;
+  word-break: break-all;
+  font-family: "SF Mono", "Fira Code", monospace;
+  font-size: 11px;
 }
 
 /* ── Buttons ────────────────────────────────────────────────────────────────── */

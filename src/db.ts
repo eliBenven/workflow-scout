@@ -27,6 +27,7 @@ export interface Session {
   name: string;
   startedAt: string;
   eventCount: number;
+  tags?: string;
 }
 
 // ── Database class ─────────────────────────────────────────────────────────────
@@ -67,6 +68,12 @@ export class EventStore {
       CREATE INDEX IF NOT EXISTS idx_events_session ON events(session_id);
       CREATE INDEX IF NOT EXISTS idx_events_type    ON events(type);
       CREATE INDEX IF NOT EXISTS idx_events_ts      ON events(timestamp);
+
+      CREATE TABLE IF NOT EXISTS session_tags (
+        session_id TEXT NOT NULL,
+        tag        TEXT NOT NULL,
+        PRIMARY KEY (session_id, tag)
+      );
     `);
   }
 
@@ -129,15 +136,16 @@ export class EventStore {
     return rows;
   }
 
-  searchEvents(query: string): BrowserEvent[] {
+  searchEvents(query: string, limit: number = 200): BrowserEvent[] {
     const pattern = `%${query}%`;
     return this.db
       .prepare(
         `SELECT * FROM events
          WHERE url LIKE ? OR selector LIKE ? OR value LIKE ? OR meta LIKE ?
-         ORDER BY timestamp ASC`
+         ORDER BY timestamp ASC
+         LIMIT ?`
       )
-      .all(pattern, pattern, pattern, pattern) as BrowserEvent[];
+      .all(pattern, pattern, pattern, pattern, limit) as BrowserEvent[];
   }
 
   getEventCount(sessionId?: string): number {
@@ -151,6 +159,44 @@ export class EventStore {
       .prepare("SELECT COUNT(*) AS cnt FROM events")
       .get() as { cnt: number };
     return row.cnt;
+  }
+
+  // ── Session Tags ─────────────────────────────────────────────────────
+
+  addSessionTag(sessionId: string, tag: string): void {
+    this.db
+      .prepare("INSERT OR IGNORE INTO session_tags (session_id, tag) VALUES (?, ?)")
+      .run(sessionId, tag);
+  }
+
+  removeSessionTag(sessionId: string, tag: string): void {
+    this.db
+      .prepare("DELETE FROM session_tags WHERE session_id = ? AND tag = ?")
+      .run(sessionId, tag);
+  }
+
+  getSessionTags(sessionId: string): string[] {
+    const rows = this.db
+      .prepare("SELECT tag FROM session_tags WHERE session_id = ? ORDER BY tag")
+      .all(sessionId) as { tag: string }[];
+    return rows.map((r) => r.tag);
+  }
+
+  getSessionsByTag(tag: string): Session[] {
+    const rows = this.db
+      .prepare(
+        `SELECT e.session_id AS id,
+                e.session_id AS name,
+                MIN(e.timestamp) AS startedAt,
+                COUNT(*) AS eventCount
+         FROM events e
+         INNER JOIN session_tags st ON e.session_id = st.session_id
+         WHERE st.tag = ?
+         GROUP BY e.session_id
+         ORDER BY MIN(e.timestamp) DESC`
+      )
+      .all(tag) as Session[];
+    return rows;
   }
 
   // ── Cleanup ────────────────────────────────────────────────────────────────
