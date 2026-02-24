@@ -99,6 +99,41 @@ function buildAction(step: PatternStep, index: number): ZapierAction {
         },
       };
 
+    case "api_call": {
+      const apiMethod = step.httpMethod || "GET";
+      const apiHeaders: Record<string, string> = {};
+      if (step.requestHeaders) {
+        for (const [k, v] of Object.entries(step.requestHeaders)) {
+          apiHeaders[k] = v === "[REDACTED]" ? `{{${k}}}` : v;
+        }
+      }
+      const apiBody: Record<string, unknown> = {};
+      if (step.requestBody) {
+        try {
+          const parsed = JSON.parse(step.requestBody);
+          if (typeof parsed === "object" && parsed !== null) {
+            for (const [k, v] of Object.entries(parsed)) {
+              apiBody[k] = v === "[REDACTED]" ? `{{${k}}}` : v;
+            }
+          }
+        } catch {
+          apiBody["_raw"] = step.requestBody;
+        }
+      }
+      return {
+        step: index + 1,
+        app: "Webhooks by Zapier",
+        action: apiMethod,
+        description: step.description,
+        params: {
+          url: step.urlPattern,
+          method: apiMethod,
+          headers: Object.keys(apiHeaders).length > 0 ? apiHeaders : { "Content-Type": "application/json" },
+          body: Object.keys(apiBody).length > 0 ? apiBody : undefined,
+        },
+      };
+    }
+
     default:
       return {
         step: index + 1,

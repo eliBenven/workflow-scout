@@ -68,6 +68,38 @@ function buildStepCode(step: PatternStep, index: number): string[] {
       }
       break;
 
+    case "api_call": {
+      const method = step.httpMethod || "GET";
+      const fetchOpts: string[] = [];
+      fetchOpts.push(`method: '${method}'`);
+
+      // Add headers (skip redacted)
+      if (step.requestHeaders) {
+        const safeHeaders = Object.entries(step.requestHeaders)
+          .filter(([, v]) => v !== "[REDACTED]")
+          .map(([k, v]) => `'${escapeString(k)}': '${escapeString(v)}'`);
+
+        const redactedHeaders = Object.entries(step.requestHeaders)
+          .filter(([, v]) => v === "[REDACTED]")
+          .map(([k]) => `'${escapeString(k)}': process.env.HEADER_${k.toUpperCase().replace(/[^A-Z0-9]/g, "_")} || ''`);
+
+        if (safeHeaders.length > 0 || redactedHeaders.length > 0) {
+          fetchOpts.push(`headers: { ${[...safeHeaders, ...redactedHeaders].join(", ")} }`);
+        }
+      }
+
+      // Add body
+      if (step.requestBody && method !== "GET") {
+        fetchOpts.push(`data: ${step.requestBody}`);
+      }
+
+      lines.push(
+        `const response_${index} = await page.request.${method.toLowerCase()}('${escapeString(step.urlPattern)}', { ${fetchOpts.join(", ")} });`
+      );
+      lines.push(`expect(response_${index}.ok()).toBeTruthy();`);
+      break;
+    }
+
     default:
       lines.push(`// Unknown step type: ${step.type}`);
   }

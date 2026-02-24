@@ -138,4 +138,111 @@ describe("detectPatterns", () => {
     const patterns = detectPatterns([]);
     expect(patterns).toHaveLength(0);
   });
+
+  // ── api_call events ─────────────────────────────────────────────────────
+
+  it("should detect repeated api_call patterns", () => {
+    const events: BrowserEvent[] = [];
+    for (let i = 0; i < 3; i++) {
+      events.push(
+        makeEvent({
+          type: "navigation",
+          url: "https://app.com/dashboard",
+          timestamp: `2024-01-01T${String(i).padStart(2, "0")}:00:00Z`,
+        }),
+        makeEvent({
+          type: "api_call",
+          url: "https://api.app.com/v1/users",
+          timestamp: `2024-01-01T${String(i).padStart(2, "0")}:00:01Z`,
+          meta: JSON.stringify({
+            method: "GET",
+            statusCode: 200,
+            requestHeaders: { "content-type": "application/json" },
+            responseContentType: "application/json",
+          }),
+        }),
+        makeEvent({
+          type: "api_call",
+          url: "https://api.app.com/v1/reports",
+          timestamp: `2024-01-01T${String(i).padStart(2, "0")}:00:02Z`,
+          meta: JSON.stringify({
+            method: "POST",
+            statusCode: 201,
+            requestHeaders: { "content-type": "application/json", "authorization": "[REDACTED]" },
+            requestBody: '{"name":"Weekly Report","type":"summary"}',
+            responseContentType: "application/json",
+          }),
+        })
+      );
+    }
+
+    const patterns = detectPatterns(events, { minFrequency: 2, minLength: 2 });
+    expect(patterns.length).toBeGreaterThanOrEqual(1);
+
+    // Should find the api_call steps
+    const best = patterns[0];
+    const apiSteps = best.steps.filter((s) => s.type === "api_call");
+    expect(apiSteps.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("should distinguish GET and POST api_calls to the same URL", () => {
+    const events: BrowserEvent[] = [];
+    for (let i = 0; i < 3; i++) {
+      events.push(
+        makeEvent({
+          type: "api_call",
+          url: "https://api.app.com/v1/data",
+          timestamp: `2024-01-01T${String(i).padStart(2, "0")}:00:00Z`,
+          meta: JSON.stringify({ method: "GET" }),
+        }),
+        makeEvent({
+          type: "api_call",
+          url: "https://api.app.com/v1/data",
+          timestamp: `2024-01-01T${String(i).padStart(2, "0")}:00:01Z`,
+          meta: JSON.stringify({ method: "POST", requestBody: '{"key":"value"}' }),
+        })
+      );
+    }
+
+    const patterns = detectPatterns(events, { minFrequency: 2, minLength: 2 });
+    expect(patterns.length).toBeGreaterThanOrEqual(1);
+
+    // The pattern should preserve the method distinction
+    const best = patterns[0];
+    expect(best.steps.length).toBe(2);
+    expect(best.steps[0].description).toContain("GET");
+    expect(best.steps[1].description).toContain("POST");
+  });
+
+  it("should propagate api_call metadata (headers, body, status) to PatternStep", () => {
+    const events: BrowserEvent[] = [];
+    for (let i = 0; i < 2; i++) {
+      events.push(
+        makeEvent({
+          type: "api_call",
+          url: "https://api.example.com/submit",
+          timestamp: `2024-01-01T${String(i).padStart(2, "0")}:00:00Z`,
+          meta: JSON.stringify({
+            method: "POST",
+            statusCode: 201,
+            requestHeaders: { "content-type": "application/json", "authorization": "[REDACTED]" },
+            requestBody: '{"name":"test","token":"[REDACTED]"}',
+            responseContentType: "application/json",
+          }),
+        })
+      );
+    }
+
+    const patterns = detectPatterns(events, { minFrequency: 2, minLength: 1 });
+    expect(patterns.length).toBeGreaterThanOrEqual(1);
+
+    const step = patterns[0].steps[0];
+    expect(step.type).toBe("api_call");
+    expect(step.httpMethod).toBe("POST");
+    expect(step.statusCode).toBe(201);
+    expect(step.requestHeaders).toBeDefined();
+    expect(step.requestHeaders!["authorization"]).toBe("[REDACTED]");
+    expect(step.requestBody).toBe('{"name":"test","token":"[REDACTED]"}');
+    expect(step.responseContentType).toBe("application/json");
+  });
 });

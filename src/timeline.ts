@@ -18,6 +18,7 @@ const COLORS: Record<string, string> = {
   click: "\x1b[33m",        // yellow
   form_submit: "\x1b[35m",  // magenta
   input_change: "\x1b[32m", // green
+  api_call: "\x1b[34m",     // blue
 };
 
 const ICONS: Record<string, string> = {
@@ -25,6 +26,7 @@ const ICONS: Record<string, string> = {
   click: "**",
   form_submit: ">>",
   input_change: "..",
+  api_call: "<>",
 };
 
 // ── Formatting helpers ─────────────────────────────────────────────────────────
@@ -70,6 +72,19 @@ function describeEvent(event: BrowserEvent): string {
     }
     case "input_change":
       return `Change input ${event.selector || ""} on ${shortenUrl(event.url, 40)}`;
+    case "api_call": {
+      let desc = `API call ${shortenUrl(event.url, 45)}`;
+      if (event.meta) {
+        try {
+          const meta = JSON.parse(event.meta);
+          if (meta.method) desc = `${meta.method} ${shortenUrl(event.url, 45)}`;
+          if (meta.statusCode) desc += ` [${meta.statusCode}]`;
+        } catch {
+          // ignore
+        }
+      }
+      return desc;
+    }
     default:
       return `${event.type} on ${shortenUrl(event.url)}`;
   }

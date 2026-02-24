@@ -14,7 +14,7 @@ import fs from "fs";
 export interface BrowserEvent {
   id?: number;
   timestamp: string;
-  type: "navigation" | "click" | "form_submit" | "input_change";
+  type: "navigation" | "click" | "form_submit" | "input_change" | "api_call";
   url: string;
   selector?: string;
   value?: string;

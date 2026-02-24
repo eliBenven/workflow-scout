@@ -186,4 +186,86 @@ describe("exportToN8n", () => {
     );
     expect(setNodes.length).toBeGreaterThanOrEqual(1);
   });
+
+  // ── api_call events become HTTP Request nodes with full context ────────
+
+  it("should create HTTP Request nodes for api_call steps with captured method/headers/body", () => {
+    const pattern = makePattern([
+      {
+        type: "api_call",
+        urlPattern: "https://api.app.com/v1/reports",
+        description: "POST https://api.app.com/v1/reports",
+        httpMethod: "POST",
+        requestHeaders: { "content-type": "application/json", "x-custom": "value" },
+        requestBody: '{"name":"Weekly","type":"summary"}',
+        statusCode: 201,
+      },
+    ]);
+    const workflow = exportToN8n(pattern);
+
+    const httpNodes = workflow.nodes.filter(
+      (n) => n.type === "n8n-nodes-base.httpRequest"
+    );
+    expect(httpNodes.length).toBeGreaterThanOrEqual(1);
+
+    const apiNode = httpNodes[0];
+    expect(apiNode.parameters.method).toBe("POST");
+    expect(apiNode.parameters.url).toBe("https://api.app.com/v1/reports");
+    expect(apiNode.parameters.sendBody).toBe(true);
+    expect(apiNode.parameters.sendHeaders).toBe(true);
+
+    // Headers should be passed through
+    const headerParams = apiNode.parameters.headerParameters as {
+      parameters: { name: string; value: string }[];
+    };
+    expect(headerParams.parameters.some((h) => h.name === "x-custom")).toBe(true);
+
+    // Body should be parsed as JSON parameters
+    const bodyParams = apiNode.parameters.bodyParameters as {
+      parameters: { name: string; value: string }[];
+    };
+    expect(bodyParams.parameters.some((p) => p.name === "name" && p.value === "Weekly")).toBe(true);
+  });
+
+  it("should use template syntax for redacted fields in api_call body", () => {
+    const pattern = makePattern([
+      {
+        type: "api_call",
+        urlPattern: "https://api.app.com/auth",
+        description: "POST https://api.app.com/auth",
+        httpMethod: "POST",
+        requestBody: '{"username":"admin","password":"[REDACTED]"}',
+      },
+    ]);
+    const workflow = exportToN8n(pattern);
+
+    const httpNodes = workflow.nodes.filter(
+      (n) => n.type === "n8n-nodes-base.httpRequest"
+    );
+    const apiNode = httpNodes[0];
+    const bodyParams = apiNode.parameters.bodyParameters as {
+      parameters: { name: string; value: string }[];
+    };
+    const pwField = bodyParams.parameters.find((p) => p.name === "password");
+    expect(pwField).toBeDefined();
+    expect(pwField!.value).toContain("$json");
+  });
+
+  it("should set auth flag when api_call has redacted authorization header", () => {
+    const pattern = makePattern([
+      {
+        type: "api_call",
+        urlPattern: "https://api.app.com/data",
+        description: "GET https://api.app.com/data",
+        httpMethod: "GET",
+        requestHeaders: { "authorization": "[REDACTED]", "accept": "application/json" },
+      },
+    ]);
+    const workflow = exportToN8n(pattern);
+
+    const httpNodes = workflow.nodes.filter(
+      (n) => n.type === "n8n-nodes-base.httpRequest"
+    );
+    expect(httpNodes[0].parameters.authentication).toBe("genericCredentialType");
+  });
 });

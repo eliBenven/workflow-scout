@@ -233,4 +233,97 @@ describe("End-to-end pipeline", () => {
     const all = store.searchEvents("app.example.com", 1000);
     expect(all).toHaveLength(12);
   });
+
+  it("should handle api_call events through the full pipeline", () => {
+    const store = createStore();
+    const events: BrowserEvent[] = [];
+    const baseTime = new Date("2024-06-15T09:00:00Z");
+
+    // Simulate: navigate to dashboard, fetch user data (API), create report (API)
+    // Repeat 3 times
+    for (let rep = 0; rep < 3; rep++) {
+      const offset = rep * 3;
+
+      events.push({
+        timestamp: new Date(baseTime.getTime() + (offset + 0) * 60_000).toISOString(),
+        type: "navigation",
+        url: "https://app.example.com/dashboard",
+        sessionId: "api_session",
+      });
+
+      events.push({
+        timestamp: new Date(baseTime.getTime() + (offset + 1) * 60_000).toISOString(),
+        type: "api_call",
+        url: "https://api.example.com/v1/users/me",
+        sessionId: "api_session",
+        meta: JSON.stringify({
+          method: "GET",
+          statusCode: 200,
+          requestHeaders: { "accept": "application/json", "authorization": "[REDACTED]" },
+          responseContentType: "application/json",
+        }),
+      });
+
+      events.push({
+        timestamp: new Date(baseTime.getTime() + (offset + 2) * 60_000).toISOString(),
+        type: "api_call",
+        url: "https://api.example.com/v1/reports",
+        sessionId: "api_session",
+        meta: JSON.stringify({
+          method: "POST",
+          statusCode: 201,
+          requestHeaders: { "content-type": "application/json", "authorization": "[REDACTED]" },
+          requestBody: '{"name":"Weekly","format":"pdf"}',
+          responseContentType: "application/json",
+        }),
+      });
+    }
+
+    // 1. Import
+    const count = store.insertMany(events);
+    expect(count).toBe(9); // 3 events * 3 reps
+
+    // 2. Analyze
+    const stored = store.getAllEvents("api_session");
+    const patterns = detectPatterns(stored, { minLength: 2, minFrequency: 2 });
+    expect(patterns.length).toBeGreaterThanOrEqual(1);
+
+    const best = patterns[0];
+    const apiSteps = best.steps.filter((s) => s.type === "api_call");
+    expect(apiSteps.length).toBeGreaterThanOrEqual(1);
+
+    // 3. Export to n8n — api_call should generate HTTP Request with captured data
+    const n8nWorkflow = exportToN8n(best);
+    const httpNodes = n8nWorkflow.nodes.filter(
+      (n) => n.type === "n8n-nodes-base.httpRequest"
+    );
+    expect(httpNodes.length).toBeGreaterThanOrEqual(1);
+
+    // POST node should have body params from captured request
+    const postNode = httpNodes.find((n) => n.parameters.method === "POST");
+    if (postNode) {
+      expect(postNode.parameters.sendBody).toBe(true);
+      const bodyParams = postNode.parameters.bodyParameters as {
+        parameters: { name: string; value: string }[];
+      };
+      expect(bodyParams.parameters.some((p) => p.name === "name")).toBe(true);
+    }
+
+    // 4. Export to Playwright — should include page.request calls
+    const playwrightScript = exportToPlaywright(best);
+    expect(playwrightScript).toContain("page.request");
+
+    // 5. Export to Zapier — api_call should be a Webhooks by Zapier action
+    const zapierJson = exportToZapierJson(best);
+    const zapier = JSON.parse(zapierJson);
+    const webhookActions = zapier.actions.filter(
+      (a: { app: string }) => a.app === "Webhooks by Zapier"
+    );
+    expect(webhookActions.length).toBeGreaterThanOrEqual(1);
+
+    // 6. Timeline should show api_call events with <> icon
+    const timeline = timelineToText(stored);
+    expect(timeline).toContain("<>");
+    expect(timeline).toContain("api_call");
+  });
 });

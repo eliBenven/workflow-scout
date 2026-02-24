@@ -12,6 +12,7 @@ const elEventCount = $("#event-count");
 const elNavCount = $("#nav-count");
 const elClickCount = $("#click-count");
 const elFormCount = $("#form-count");
+const elApiCount = $("#api-count");
 const btnStart = $("#btn-start");
 const btnStop = $("#btn-stop");
 const btnExport = $("#btn-export");
@@ -99,6 +100,7 @@ function refreshUI() {
       elFormCount.textContent = String(
         (typeCounts.form_submit || 0) + (typeCounts.input_change || 0)
       );
+      elApiCount.textContent = String(typeCounts.api_call || 0);
     }
   });
 }

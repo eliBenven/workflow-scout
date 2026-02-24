@@ -136,6 +136,75 @@ function buildHttpRequestNode(
   };
 }
 
+function buildApiCallNode(
+  step: PatternStep,
+  index: number,
+  position: [number, number]
+): N8nNode {
+  const method = step.httpMethod || "GET";
+  const name = `Step ${index + 1}: ${method} ${step.urlPattern.slice(0, 40)}`;
+
+  const params: Record<string, unknown> = {
+    url: step.urlPattern,
+    method,
+    options: {},
+  };
+
+  // Add captured request headers (skip redacted ones)
+  if (step.requestHeaders) {
+    const headerEntries = Object.entries(step.requestHeaders)
+      .filter(([, v]) => v !== "[REDACTED]")
+      .map(([name, value]) => ({ name, value }));
+
+    if (headerEntries.length > 0) {
+      params.sendHeaders = true;
+      params.headerParameters = { parameters: headerEntries };
+    }
+
+    // If there were redacted auth headers, add a placeholder
+    const hasRedactedAuth = Object.entries(step.requestHeaders)
+      .some(([k]) => k === "authorization" || k === "x-api-key");
+    if (hasRedactedAuth) {
+      params.authentication = "genericCredentialType";
+      params.genericAuthType = "httpHeaderAuth";
+    }
+  }
+
+  // Add captured request body
+  if (step.requestBody && method !== "GET") {
+    params.sendBody = true;
+    // Try to parse as JSON for structured body
+    try {
+      const parsed = JSON.parse(step.requestBody);
+      if (typeof parsed === "object" && parsed !== null) {
+        params.contentType = "json";
+        params.bodyParameters = {
+          parameters: Object.entries(parsed).map(([name, value]) => ({
+            name,
+            value: value === "[REDACTED]" ? `={{ $json.${name} }}` : String(value),
+          })),
+        };
+      } else {
+        params.contentType = "raw";
+        params.body = step.requestBody;
+      }
+    } catch {
+      // Not JSON — send as raw body
+      params.contentType = "raw";
+      params.body = step.requestBody;
+    }
+  }
+
+  return {
+    id: nextNodeId(),
+    name,
+    type: "n8n-nodes-base.httpRequest",
+    typeVersion: 4.2,
+    position,
+    parameters: params,
+  };
+}
+
 function buildSetNode(
   description: string,
   position: [number, number]
@@ -229,7 +298,9 @@ export function exportToN8n(
     const step = pattern.steps[i];
 
     let node: N8nNode;
-    if (step.type === "navigation" || step.type === "form_submit") {
+    if (step.type === "api_call") {
+      node = buildApiCallNode(step, i, [x, yBase]);
+    } else if (step.type === "navigation" || step.type === "form_submit") {
       node = buildHttpRequestNode(step, i, [x, yBase]);
     } else {
       // click / input_change -> Set node that records the action

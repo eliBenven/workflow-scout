@@ -33,6 +33,14 @@ export interface PatternStep {
   formFields?: Record<string, string>;
   /** HTTP method used (POST, GET, etc.) */
   httpMethod?: string;
+  /** Captured request headers (from api_call events) */
+  requestHeaders?: Record<string, string>;
+  /** Captured request body (from api_call events) */
+  requestBody?: string | null;
+  /** HTTP status code (from api_call events) */
+  statusCode?: number;
+  /** Response content type (from api_call events) */
+  responseContentType?: string;
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -69,6 +77,17 @@ function fingerprint(event: BrowserEvent): string {
     parts.push(selectorNorm);
   }
 
+  // For api_call events, include the HTTP method in the fingerprint
+  // so GET /api/users and POST /api/users are distinct patterns
+  if (event.type === "api_call" && event.meta) {
+    try {
+      const meta = JSON.parse(event.meta);
+      if (meta.method) parts.push(meta.method);
+    } catch {
+      // ignore
+    }
+  }
+
   return parts.join("|");
 }
 
@@ -77,22 +96,29 @@ function fingerprint(event: BrowserEvent): string {
  * If an original event is supplied, metadata (form fields, method) is extracted.
  */
 function fingerprintToStep(fp: string, event?: BrowserEvent): PatternStep {
-  const [type, urlPattern, selector] = fp.split("|");
+  const parts = fp.split("|");
+  const type = parts[0];
+  const urlPattern = parts[1];
+  // For api_call: parts = [type, url, method]; for others: [type, url, selector?]
+  const selector = type === "api_call" ? undefined : (parts[2] || undefined);
+  const apiMethod = type === "api_call" ? (parts[2] || "GET") : undefined;
+
   const descriptions: Record<string, string> = {
     navigation: `Navigate to ${urlPattern}`,
     click: `Click ${selector || "element"} on ${urlPattern}`,
     form_submit: `Submit form on ${urlPattern}`,
     input_change: `Fill input ${selector || ""} on ${urlPattern}`,
+    api_call: `${apiMethod || "GET"} ${urlPattern}`,
   };
 
   const step: PatternStep = {
     type,
     urlPattern,
-    selector: selector || undefined,
+    selector,
     description: descriptions[type] || `${type} on ${urlPattern}`,
   };
 
-  // Extract form field metadata from the original event
+  // Extract metadata from the original event
   if (event?.meta) {
     try {
       const meta = JSON.parse(event.meta);
@@ -101,6 +127,19 @@ function fingerprintToStep(fp: string, event?: BrowserEvent): PatternStep {
       }
       if (meta.method) {
         step.httpMethod = meta.method as string;
+      }
+      // api_call-specific metadata
+      if (meta.requestHeaders && typeof meta.requestHeaders === "object") {
+        step.requestHeaders = meta.requestHeaders as Record<string, string>;
+      }
+      if (meta.requestBody !== undefined) {
+        step.requestBody = meta.requestBody as string | null;
+      }
+      if (meta.statusCode !== undefined) {
+        step.statusCode = meta.statusCode as number;
+      }
+      if (meta.responseContentType) {
+        step.responseContentType = meta.responseContentType as string;
       }
     } catch {
       // Malformed meta — ignore
